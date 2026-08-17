@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Risotto allo zafferano – scaler</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    label { display:block; font-weight: 600; margin-bottom: 8px; }
+    input[type="range"] { width: 100%; }
+    .row { display:flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+    .pill { background:#f6f6f6; border:1px solid #e6e6e6; padding:10px 12px; border-radius: 10px; min-width: 240px; }
+    .big { font-size: 20px; font-weight: 700; }
+    small { color: #555; }
+    .muted { color:#666; font-size: 14px; }
+    .controls { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-top: 14px; }
+    .control { background:#fafafa; border:1px solid #eee; padding:10px 12px; border-radius:10px; }
+    .control input[type="number"]{ width: 120px; padding: 6px 8px; }
+    .switch { display:flex; align-items:center; gap:10px; }
+  </style>
+</head>
+
+<body>
+  <h1>Risotto allo zafferano – ingredienti dinamici</h1>
+
+  <div class="card">
+    <label for="riso">
+      Grammi di riso: <span id="risoLabel" class="big">700</span> g
+    </label>
+    <input id="riso" type="range" min="100" max="1500" step="10" value="700" />
+    <small>Base: 700 g</small>
+
+    <div class="controls">
+      <div class="control switch">
+        <input id="precisione" type="checkbox" />
+        <label for="precisione" style="margin:0; font-weight:600;">Modalità precisione (ml)</label>
+      </div>
+
+      <div class="control">
+        <label for="gPerCucchiaino" style="margin-bottom:6px;">Zafferano: g per cucchiaino</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input id="gPerCucchiaino"
+                 type="number"
+                 min="0.05"
+                 max="0.50"
+                 step="0.01"
+                 value="0.20" />
+          <span class="muted">g/cucchiaino</span>
+        </div>
+        <div class="muted" style="margin-top:6px;">Default (A): 1 cucchiaino ≈ 0,20 g</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="pill">
+        <div>Brodo vegetale</div>
+        <div class="big"><span id="brodoMain"></span></div>
+        <div class="muted">Base: ~2,2 L per 700 g</div>
+      </div>
+
+      <div class="pill">
+        <div>Vino bianco</div>
+        <div class="big"><span id="vinoMain"></span></div>
+        <div class="muted">Base: ~90 g per 700 g</div>
+      </div>
+
+      <div class="pill">
+        <div>Zafferano in pistilli</div>
+        <div class="big"><span id="zafferanoMain"></span></div>
+        <div class="muted">Base: ~2 cucchiaini “abbondanti” per 700 g</div>
+      </div>
+
+      <div class="pill">
+        <div>Cipolla dorata</div>
+        <div class="big"><span id="cipolla"></span> cipolle</div>
+        <div class="muted">arrotondata a quarti</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">Per mantecare</h2>
+    <div class="row">
+      <div class="pill">
+        <div>Grana Padano (freddo)</div>
+        <div class="big"><span id="grana"></span> g</div>
+      </div>
+
+      <div class="pill">
+        <div>Burro (freddo)</div>
+        <div class="big"><span id="burro"></span> g</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">Altri</h2>
+    <ul style="margin: 8px 0 0; padding-left: 18px;">
+      <li>Acqua: <strong>q.b.</strong></li>
+      <li>Olio EVO: <strong>q.b.</strong></li>
+      <li>Sale fino: <strong>q.b.</strong></li>
+    </ul>
+  </div>
+
+  <script>
+    // BASE per 700 g di riso (dalla tua ricetta)
+    const BASE_RISO = 700;
+
+    const BASE = {
+      vino_g: 90,
+      brodo_l: 2.2,
+      zafferano_cucchiaini: 2.0, // modello numerico della tua indicazione
+      cipolla_n: 1.0,
+      grana_g: 175,
+      burro_g: 165
+    };
+
+    const el = {
+      riso: document.getElementById("riso"),
+      risoLabel: document.getElementById("risoLabel"),
+      precisione: document.getElementById("precisione"),
+      gPerCucchiaino: document.getElementById("gPerCucchiaino"),
+
+      brodoMain: document.getElementById("brodoMain"),
+      vinoMain: document.getElementById("vinoMain"),
+      zafferanoMain: document.getElementById("zafferanoMain"),
+
+      cipolla: document.getElementById("cipolla"),
+      grana: document.getElementById("grana"),
+      burro: document.getElementById("burro")
+    };
+
+    function roundToQuarter(x) { return Math.round(x * 4) / 4; }
+
+    function formatIt(n, digits = 0) {
+      const s = (Math.round(n * Math.pow(10, digits)) / Math.pow(10, digits)).toString();
+      return s.replace(".", ",");
+    }
+
+    function update() {
+      const risoG = Number(el.riso.value);
+      const k = risoG / BASE_RISO;
+
+      const precisione = el.precisione.checked;
+
+      // 2 decimali (coerente con step 0.01)
+      const gPerCucchiaino = Math.round((Number(el.gPerCucchiaino.value || 0.20)) * 100) / 100;
+
+      const vino_g = Math.round(BASE.vino_g * k);
+
+      const brodo_l = Math.round(BASE.brodo_l * k * 10) / 10; // 1 decimale
+      const brodo_ml = Math.round(brodo_l * 1000);
+
+      const zaf_cucchiaini = Math.round(BASE.zafferano_cucchiaini * k * 10) / 10; // 1 decimale
+      const zaf_g = Math.round(zaf_cucchiaini * gPerCucchiaino * 100) / 100;      // 2 decimali
+
+      const cipolla = roundToQuarter(BASE.cipolla_n * k);
+
+      const grana = Math.round(BASE.grana_g * k);
+      const burro = Math.round(BASE.burro_g * k);
+
+      el.risoLabel.textContent = risoG;
+
+      el.brodoMain.textContent = precisione
+        ? `${brodo_ml} ml`
+        : `${formatIt(brodo_l, 1)} L`;
+
+      el.vinoMain.textContent = precisione
+        ? `${vino_g} g (≈ ${vino_g} ml)`
+        : `${vino_g} g`;
+
+      el.zafferanoMain.textContent =
+        `${formatIt(zaf_cucchiaini, 1)} cucchiaini (≈ ${formatIt(zaf_g, 2)} g)`;
+
+      el.cipolla.textContent = formatIt(cipolla, 2);
+      el.grana.textContent = grana;
+      el.burro.textContent = burro;
+    }
+
+    el.riso.addEventListener("input", update);
+    el.precisione.addEventListener("change", update);
+    el.gPerCucchiaino.addEventListener("input", update);
+
+    update();
+  </script>
+</body>
+</html>
