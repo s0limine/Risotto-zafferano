@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Risotto allo zafferano — Calcolatore ingredienti</title>
+  <style>
+    :root { --bg:#0b0f14; --card:#121826; --text:#e6edf3; --muted:#9aa4b2; --accent:#f59e0b; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 20px; margin: 0 0 14px; }
+    .card { background:var(--card); border:1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display:block; font-size: 12px; color:var(--muted); margin-bottom: 6px; }
+    input { width:100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+            border:1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text); }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.35; }
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; letter-spacing: .02em; }
+    .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; background: rgba(245,158,11,.12); color: var(--accent); font-size: 12px; }
+    .right { text-align:right; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .small { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Risotto allo zafferano — Calcolatore ingredienti</h1>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="baseRice">Ricetta base: grammi di riso</label>
+          <input id="baseRice" type="number" min="1" step="1" value="700" />
+          <div class="hint">Questa è la quantità “di riferimento” da cui partono le proporzioni.</div>
+        </div>
+        <div>
+          <label for="targetRice">Vuoi preparare: grammi di riso</label>
+          <input id="targetRice" type="number" min="1" step="1" value="700" />
+          <div class="hint">Cambia questo valore per scalare tutto il resto.</div>
+        </div>
+      </div>
+      <div class="hint">
+        Fattore di scala: <span class="pill"><span id="factor" class="mono">1.00</span>x</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="small muted">
+        Note: “q.b.” non viene scalato. Lo zafferano in cucchiaini è una stima: se mi dici che zafferano usi (pistilli/qualità) posso aggiungere anche una conversione più precisa in grammi.
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Ingrediente</th>
+            <th class="right">Quantità</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Ricetta base (da pagina Notion)
+    // - Alcuni ingredienti sono volutamente "q.b." (non scalati)
+    // - Lo zafferano resta "circa" (scalato ma sempre indicativo)
+    const recipe = [
+      { name: "Riso Carnaroli", unit: "g", base: 700, type: "number" },
+      { name: "Zafferano in pistilli", unit: "cucchiaini abbondanti", base: 2, type: "number", precision: 2, approx: true },
+      { name: "Cipolle dorate", unit: "cipolla media", base: 1, type: "number", precision: 2, approx: true },
+      { name: "Vino bianco", unit: "g", base: 90, type: "number" },
+      { name: "Brodo vegetale", unit: "l", base: 2.2, type: "number", precision: 2, approx: true },
+      { name: "Acqua", unit: "q.b.", base: null, type: "qb" },
+      { name: "Olio extravergine d’oliva", unit: "q.b.", base: null, type: "qb" },
+      { name: "Sale fino", unit: "q.b.", base: null, type: "qb" },
+      { name: "Grana Padano DOP (freddo, da grattugiare)", unit: "g", base: 175, type: "number", approx: true },
+      { name: "Burro (freddo di frigo)", unit: "g", base: 165, type: "number", approx: true },
+    ];
+
+    const baseRiceEl = document.getElementById("baseRice");
+    const targetRiceEl = document.getElementById("targetRice");
+    const factorEl = document.getElementById("factor");
+    const rowsEl = document.getElementById("rows");
+
+    function roundTo(n, precision = 0) {
+      const p = Math.pow(10, precision);
+      return Math.round(n * p) / p;
+    }
+
+    function fmtQty(item, factor) {
+      if (item.type === "qb") return "q.b.";
+      const precision = item.precision ?? (item.unit === "g" ? 0 : 2);
+      const val = roundTo(item.base * factor, precision);
+
+      const prefix = item.approx ? "≈ " : "";
+      return `${prefix}${val} ${item.unit}`.trim();
+    }
+
+    function render() {
+      const baseRice = Number(baseRiceEl.value || 0);
+      const targetRice = Number(targetRiceEl.value || 0);
+
+      const factor = (baseRice > 0 && targetRice > 0) ? (targetRice / baseRice) : 1;
+      factorEl.textContent = factor.toFixed(2);
+
+      rowsEl.innerHTML = "";
+      for (const item of recipe) {
+        const tr = document.createElement("tr");
+
+        const tdName = document.createElement("td");
+        tdName.textContent = item.name;
+
+        const tdQty = document.createElement("td");
+        tdQty.className = "right";
+        tdQty.textContent = (item.name === "Riso Carnaroli")
+          ? `${targetRice} g`
+          : fmtQty(item, factor);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdQty);
+        rowsEl.appendChild(tr);
+      }
+    }
+
+    baseRiceEl.addEventListener("input", render);
+    targetRiceEl.addEventListener("input", render);
+    render();
+  </script>
+</body>
+</html>
